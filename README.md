@@ -33,8 +33,13 @@ npm run tauri dev      # 개발 실행
 npm run tauri build    # .app / .dmg 생성 (src-tauri/target/release/bundle)
 ```
 
+## 맥 위젯
+
+`widget/` 폴더에 오늘/내일 할 일 위젯(Swift, WidgetKit)이 있습니다. 설치 방법은 [widget/README.md](widget/README.md).
+
 ## 구조
 
 - `src-tauri/src/lib.rs`: 폴더 스캔, 파일 쓰기, 파일 감시 (Rust)
 - `src/lib/notes.ts`: 체크/추가 등 md 줄 단위 편집 로직
-- `src/App.tsx`, `src/Calendar.tsx`: 화면
+- `src/App.tsx`, `src/BriefView.tsx`, `src/Calendar.tsx`: 화면
+- `widget/`: macOS 위젯 (XcodeGen 프로젝트)
