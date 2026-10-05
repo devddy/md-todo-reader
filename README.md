@@ -1,0 +1,29 @@
+# MD Todo
+
+날짜별 할일 md 파일을 보기 좋게 보는 macOS 앱. md 파일이 원본이고, 앱은 그 파일을 읽고 필요한 줄만 고쳐 씁니다. Obsidian과 같은 폴더를 함께 써도 됩니다.
+
+## 기능 (v0.1)
+
+- 폴더 선택 후 `YYYY-MM-DD.md` 파일을 날짜로 인식 (하위 폴더 4단계까지)
+- 체크박스 클릭 시 원본 파일의 해당 줄만 수정 (`- [ ]` ↔ `- [x]`)
+  - "오늘 꼭", "할 일", "내일 할 것", "todo" 같은 섹션의 일반 `- ` 항목도 체크 가능 (체크하면 `- [x]`로 바뀜)
+- 전날 "내일 …" 섹션에 적은 항목을 오늘 화면 위에 표시
+- 최근 14일의 미완료 `- [ ]` 항목을 "밀린 일"로 모아 보기
+- 빠른 추가: 해당 날짜 파일의 할일 섹션 끝에 `- [ ] …` 추가, 파일이 없으면 생성
+- 캘린더(완료율 점), 최근 날짜 목록, 외부 수정 실시간 반영, 다크 모드
+
+## 실행
+
+준비물: [Rust](https://rustup.rs), Node 20+, Xcode Command Line Tools (`xcode-select --install`)
+
+```sh
+npm install
+npm run tauri dev      # 개발 실행
+npm run tauri build    # .app / .dmg 생성 (src-tauri/target/release/bundle)
+```
+
+## 구조
+
+- `src-tauri/src/lib.rs`: 폴더 스캔, 파일 쓰기, 파일 감시 (Rust)
+- `src/lib/notes.ts`: 체크/추가 등 md 줄 단위 편집 로직
+- `src/App.tsx`, `src/Calendar.tsx`: 화면
