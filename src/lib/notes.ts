@@ -147,3 +147,20 @@ export function folderForNew(vault: string, notes: DailyNote[]): string {
   if (!last) return `${vault.replace(/\/$/, "")}/daily`;
   return last.path.slice(0, last.path.lastIndexOf("/"));
 }
+
+/** Open checkable items outside the "내일 ..." section: what is left for today. */
+export function todayOpenItems(content: string): TaskItem[] {
+  const lines = scan(content);
+  return checkableItems(content).filter(
+    (t) => !t.done && !TOMORROW_HEADING_RE.test(lines[t.line - 1].section),
+  );
+}
+
+/** Item text for places without markdown (notifications): drops trailing links, keeps link labels. */
+export function plainText(text: string): string {
+  return text
+    .replace(/\s+—\s+(?:\[[^\]]+\]\((?:[^()\s]|\([^()\s]*\))+\)(?:,\s*)?)+$/, "")
+    .replace(/\[([^\]]+)\]\((?:[^()\s]|\([^()\s]*\))+\)/g, "$1")
+    .replace(/[*`]/g, "")
+    .trim();
+}

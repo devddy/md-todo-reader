@@ -25,10 +25,20 @@ import Calendar from "./Calendar";
 import BriefView from "./BriefView";
 import { AddInput, Check, InlineMd, Link } from "./components";
 import { isBrief } from "./lib/brief";
+import { sendReminder, useEveningReminder } from "./reminder";
 import "./App.css";
 
 const VAULT_KEY = "vault";
 const CARRY_DAYS = 14;
+const REMIND_KEY = "remind-at";
+
+function loadRemindAt(): string {
+  try {
+    return localStorage.getItem(REMIND_KEY) ?? "18:00";
+  } catch {
+    return "18:00";
+  }
+}
 
 function loadVault(): string | null {
   try {
@@ -43,6 +53,7 @@ export default function App() {
   const [notes, setNotes] = useState<DailyNote[]>([]);
   const [date, setDate] = useState(todayStr());
   const [error, setError] = useState<string | null>(null);
+  const [remindAt, setRemindAt] = useState(loadRemindAt); // "" = off
 
   const reload = useCallback(async () => {
     if (!vault) return;
@@ -68,6 +79,17 @@ export default function App() {
       unlisten.then((f) => f());
     };
   }, [vault, reload]);
+
+  useEveningReminder(remindAt, notes);
+
+  function changeRemindAt(value: string) {
+    setRemindAt(value);
+    try {
+      localStorage.setItem(REMIND_KEY, value);
+    } catch {
+      /* per-session only */
+    }
+  }
 
   const byDate = useMemo(() => new Map(notes.map((n) => [n.date, n])), [notes]);
   const note = byDate.get(date);
@@ -183,6 +205,29 @@ export default function App() {
               );
             })}
         </ul>
+        <div className="settings">
+          <label>
+            <input
+              type="checkbox"
+              checked={remindAt !== ""}
+              onChange={(e) => changeRemindAt(e.target.checked ? "18:00" : "")}
+            />
+            남은 할 일 알림
+          </label>
+          {remindAt && (
+            <div className="remind-row">
+              <input type="time" value={remindAt} onChange={(e) => e.target.value && changeRemindAt(e.target.value)} />
+              <button
+                onClick={async () => {
+                  const sent = await sendReminder(byDate.get(todayStr()));
+                  if (!sent) setError("오늘 남은 할 일이 없거나 알림 권한이 꺼져 있어요.");
+                }}
+              >
+                테스트
+              </button>
+            </div>
+          )}
+        </div>
       </aside>
 
       <main className="content">

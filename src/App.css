@@ -159,3 +159,9 @@ a:hover { text-decoration: underline; }
 @media (prefers-color-scheme: dark) {
   .badge { color: #fbbf24; }
 }
+
+.sidebar { display: flex; flex-direction: column; }
+.settings { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.settings label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.remind-row { display: flex; gap: 6px; margin-top: 6px; }
+.remind-row input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
