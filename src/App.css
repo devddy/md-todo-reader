@@ -82,7 +82,7 @@ a:hover { text-decoration: underline; }
 .weekday { color: var(--muted); font-weight: 500; }
 .spacer { flex: 1; }
 
-.quick-add input {
+.add-input input {
   width: 100%;
   font: inherit;
   color: inherit;
@@ -92,7 +92,7 @@ a:hover { text-decoration: underline; }
   padding: 8px 12px;
   outline: none;
 }
-.quick-add input:focus { border-color: var(--accent); }
+.add-input input:focus { border-color: var(--accent); }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 14px; }
 .panel h2 { font-size: 13px; color: var(--muted); margin: 0 0 4px; font-weight: 600; }
@@ -124,3 +124,38 @@ a:hover { text-decoration: underline; }
 }
 .check.on { background: var(--accent); border-color: var(--accent); position: relative; }
 .check.on::after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+/* Daily Brief layout */
+.brief { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.brief-top { display: flex; flex-direction: column; gap: 6px; }
+.schedule { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.label { flex: none; font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 5px; }
+.intro { color: var(--muted); font-size: 13px; }
+.intro p { margin: 0; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.card-head { width: 100%; display: flex; align-items: center; gap: 6px; border: none; border-radius: 10px; padding: 10px 14px; text-align: left; }
+.card-head h2 { font-size: 15px; margin: 0; }
+.card-head .count { margin-left: auto; font-size: 12px; }
+.caret { color: var(--muted); font-size: 11px; width: 10px; }
+.card-body { padding: 0 14px 12px; }
+.card.must { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.card.must .card-head h2 { color: var(--accent); }
+.card.done .item-body, .card.done .md { color: var(--muted); }
+
+.group h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 2px; text-transform: none; }
+.group ul { list-style: none; margin: 0; padding: 0; }
+.item { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.group ul > .item:first-child { border-top: none; }
+.bullet { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--done); margin: 10px 5px 0 6px; }
+.item-body { flex: 1; min-width: 0; }
+.item.done .text { color: var(--done); text-decoration: line-through; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; color: #b45309; background: color-mix(in srgb, #f59e0b 18%, transparent); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.links { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; font-size: 12px; vertical-align: 1px; }
+.links a { background: color-mix(in srgb, var(--accent) 10%, transparent); border-radius: 4px; padding: 0 6px; }
+.md p { margin: 4px 0; }
+.card .add-input { margin-top: 8px; }
+.card .add-input input { padding: 5px 10px; font-size: 14px; }
+@media (prefers-color-scheme: dark) {
+  .badge { color: #fbbf24; }
+}

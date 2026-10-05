@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  type AddTarget,
   type DailyNote,
   type TaskItem,
   addTask,
@@ -21,6 +22,9 @@ import {
   weekday,
 } from "./lib/notes";
 import Calendar from "./Calendar";
+import BriefView from "./BriefView";
+import { AddInput, Check, InlineMd, Link } from "./components";
+import { isBrief } from "./lib/brief";
 import "./App.css";
 
 const VAULT_KEY = "vault";
@@ -39,7 +43,6 @@ export default function App() {
   const [notes, setNotes] = useState<DailyNote[]>([]);
   const [date, setDate] = useState(todayStr());
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
 
   const reload = useCallback(async () => {
     if (!vault) return;
@@ -70,7 +73,12 @@ export default function App() {
   const note = byDate.get(date);
   const prev = useMemo(() => [...notes].reverse().find((n) => n.date < date), [notes, date]);
 
-  const planned = useMemo(() => (prev ? tomorrowItems(prev.content) : []), [prev]);
+  // The brief skill already carries yesterday's "내일 할 것" into today's "오늘 꼭" as "(이월)".
+  // Show them separately only until that has happened.
+  const planned = useMemo(
+    () => (prev && !(note && isBrief(note.content)) ? tomorrowItems(prev.content) : []),
+    [prev, note],
+  );
 
   // Open `- [ ]` tasks from recent days, minus the ones already shown as yesterday's plan.
   const carried = useMemo(() => {
@@ -114,17 +122,14 @@ export default function App() {
     save(target, toggleLine(target.content, line));
   }
 
-  function submitDraft(e: React.FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text || !vault) return;
-    const target = note ?? {
+  function add(text: string, target: AddTarget = "today") {
+    if (!vault) return;
+    const base = note ?? {
       date,
       path: `${folderForNew(vault, notes)}/${date}.md`,
       content: newNoteContent(date),
     };
-    save(target, addTask(target.content, text));
-    setDraft("");
+    save(base, addTask(base.content, text, target));
   }
 
   if (!vault) {
@@ -206,13 +211,9 @@ export default function App() {
 
         {error && <div className="error">{error}</div>}
 
-        <form className="quick-add" onSubmit={submitDraft}>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`${date} 할일 추가 후 Enter`}
-          />
-        </form>
+        <div className="quick-add">
+          <AddInput placeholder={`${date.slice(5)} 오늘 꼭에 추가 후 Enter`} onAdd={(t) => add(t)} />
+        </div>
 
         {planned.length > 0 && prev && (
           <Panel title={`${prev.date.slice(5)}에 적어 둔 할 일`}>
@@ -235,7 +236,13 @@ export default function App() {
           </Panel>
         )}
 
-        {note ? (
+        {note && isBrief(note.content) ? (
+          <BriefView
+            note={note}
+            onToggle={(line) => toggle(note, line)}
+            onAddTomorrow={(t) => add(t, "tomorrow")}
+          />
+        ) : note ? (
           <NoteView note={note} onToggle={(line) => toggle(note, line)} />
         ) : (
           <p className="hint">이 날짜의 파일이 없어요. 위에서 할일을 추가하면 새로 만들어져요.</p>
@@ -259,38 +266,10 @@ function TaskRow({ task, tag, onToggle }: { task: TaskItem; tag?: string; onTogg
     <li className={task.done ? "task done" : "task"}>
       <Check checked={task.done} onClick={onToggle} />
       <span className="inline-md">
-        <Markdown remarkPlugins={[remarkGfm]} components={{ p: ({ children }) => <>{children}</>, a: Link }}>
-          {task.text}
-        </Markdown>
+        <InlineMd text={task.text} />
       </span>
       {tag && <span className="tag">{tag}</span>}
     </li>
-  );
-}
-
-function Check({ checked, onClick }: { checked: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      className={checked ? "check on" : "check"}
-      onClick={onClick}
-    />
-  );
-}
-
-function Link({ href, children }: { href?: string; children?: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      onClick={(e) => {
-        e.preventDefault();
-        if (href) openUrl(href);
-      }}
-    >
-      {children}
-    </a>
   );
 }
 
