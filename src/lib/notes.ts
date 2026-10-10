@@ -110,33 +110,6 @@ export function toggleLine(content: string, line: number): string {
 
 export type AddTarget = "today" | "tomorrow";
 
-/**
- * Adds a task at the end of the first to-do section ("오늘 꼭", "할 일", ...)
- * or, for "tomorrow", of the "내일 ..." section. Appends the section if missing.
- */
-export function addTask(content: string, text: string, target: AddTarget = "today"): string {
-  // "내일 할 것" uses plain bullets, the format the brief skill carries over as "- (이월) ...".
-  const item = target === "tomorrow" ? `- ${text}` : `- [ ] ${text}`;
-  const wanted = (section: string) =>
-    target === "tomorrow"
-      ? TOMORROW_HEADING_RE.test(section)
-      : TODO_HEADING_RE.test(section) && !TOMORROW_HEADING_RE.test(section);
-  const lines = scan(content);
-  const start = lines.findIndex((l) => !l.inCode && /^##\s/.test(l.text) && wanted(l.section));
-  const raw = content.split("\n");
-  if (start === -1) {
-    const body = content.replace(/\s*$/, "");
-    const heading = target === "tomorrow" ? "## 내일 할 것" : "## 오늘 꼭";
-    return `${body}${body ? "\n\n" : ""}${heading}\n${item}\n`;
-  }
-  let end = start + 1;
-  while (end < raw.length && !/^#{1,2}\s/.test(raw[end])) end++;
-  let insertAt = end;
-  while (insertAt > start + 1 && raw[insertAt - 1].trim() === "") insertAt--;
-  raw.splice(insertAt, 0, item);
-  return raw.join("\n");
-}
-
 const MEMO = "(메모)";
 
 /**
@@ -170,11 +143,6 @@ export function addTodo(content: string, text: string, target: AddTarget): strin
 /** The skeleton add_todo.sh writes for a missing note (the Daily Brief output contract). */
 export function briefSkeleton(date: string): string {
   return `# ${date} (${weekday(date)}) 아침\n오늘 일정: 일정 소스 없음\n## 오늘 꼭\n## 정리됨\n## 참고\n## 내일 할 것\n`;
-}
-
-/** Same skeleton the Daily Brief skill writes, so a later brief run slots in cleanly. */
-export function newNoteContent(date: string): string {
-  return `# ${date} (${weekday(date)})\n\n## 오늘 꼭\n\n## 내일 할 것\n`;
 }
 
 export function progress(content: string): { done: number; total: number } {

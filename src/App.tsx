@@ -9,10 +9,10 @@ import {
   type AddTarget,
   type DailyNote,
   type TaskItem,
-  addTask,
+  addTodo,
+  briefSkeleton,
   checkableItems,
   folderForNew,
-  newNoteContent,
   openTasks,
   progress,
   shiftDate,
@@ -218,14 +218,21 @@ export default function App() {
     save(target, toggleLine(target.content, line));
   }
 
-  function add(text: string, target: AddTarget = "today") {
+  // Same line format as the daily-todo skill and the notch panel (see addTodo), applied
+  // to a fresh read of the file so edits from Obsidian or /daily-brief are not overwritten.
+  // A missing note is created with the skill's skeleton.
+  async function add(text: string, target: AddTarget = "today") {
     if (!vault) return;
-    const base = note ?? {
-      date,
-      path: `${folderForNew(vault, notes)}/${date}.md`,
-      content: newNoteContent(date),
-    };
-    save(base, addTask(base.content, text, target));
+    try {
+      const path = note?.path ?? `${folderForNew(vault, notes)}/${date}.md`;
+      const base = note ? await invoke<string>("read_note", { path }) : briefSkeleton(date);
+      const content = addTodo(base, text, target);
+      if (content === base) return; // empty or already there
+      save({ date, path, content: base }, content);
+    } catch (e) {
+      setError(String(e));
+      reload();
+    }
   }
 
   if (!vault) {
