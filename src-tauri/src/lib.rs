@@ -13,6 +13,14 @@ struct DailyNote {
     content: String,
 }
 
+/// A sprint note written by the `/sprint-sync` skill: `<vault>/sprints/*.md`.
+#[derive(Serialize)]
+struct SprintFile {
+    path: String,
+    name: String,
+    content: String,
+}
+
 #[derive(Default)]
 struct WatcherState(Mutex<Option<RecommendedWatcher>>);
 
@@ -66,6 +74,39 @@ fn load_daily(vault: String) -> Result<Vec<DailyNote>, String> {
     Ok(notes)
 }
 
+fn collect_sprints(dir: &Path) -> Vec<SprintFile> {
+    let Ok(entries) = fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<SprintFile> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') || !path.is_file() {
+                return None;
+            }
+            let stem = name.strip_suffix(".md")?.to_string();
+            let content = fs::read_to_string(&path).ok()?;
+            Some(SprintFile {
+                path: path.to_string_lossy().to_string(),
+                name: stem,
+                content,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Reads `<vault>/sprints/*.md` (not recursive). A missing folder just means no sprints yet.
+#[tauri::command]
+fn load_sprints(vault: String) -> Result<Vec<SprintFile>, String> {
+    let root = PathBuf::from(&vault);
+    if !root.is_dir() {
+        return Err(format!("폴더를 찾을 수 없어요: {vault}"));
+    }
+    Ok(collect_sprints(&root.join("sprints")))
+}
+
 #[tauri::command]
 fn write_note(path: String, content: String) -> Result<(), String> {
     let path = PathBuf::from(path);
@@ -116,7 +157,7 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![load_daily, write_note, watch_vault])
+        .invoke_handler(tauri::generate_handler![load_daily, load_sprints, write_note, watch_vault])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
@@ -133,7 +174,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::is_date_name;
+    use super::{collect_sprints, is_date_name};
+    use std::fs;
 
     #[test]
     fn date_names() {
@@ -141,5 +183,25 @@ mod tests {
         assert_eq!(is_date_name("2026-10-5.md"), None);
         assert_eq!(is_date_name("notes.md"), None);
         assert_eq!(is_date_name("2026-10-05.txt"), None);
+    }
+
+    #[test]
+    fn sprint_files() {
+        let dir = std::env::temp_dir().join(format!("md-todo-sprints-{}", std::process::id()));
+        let sprints = dir.join("sprints");
+        fs::create_dir_all(sprints.join("old")).unwrap();
+        fs::write(sprints.join("BE3-sprint-21.md"), "# b").unwrap();
+        fs::write(sprints.join("BE3-sprint-20.md"), "# a").unwrap();
+        fs::write(sprints.join("notes.txt"), "x").unwrap();
+        fs::write(sprints.join(".hidden.md"), "x").unwrap();
+        fs::write(sprints.join("old").join("BE3-sprint-19.md"), "x").unwrap();
+
+        let found = collect_sprints(&sprints);
+        let names: Vec<_> = found.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["BE3-sprint-20", "BE3-sprint-21"]);
+        assert_eq!(found[0].content, "# a");
+        assert!(collect_sprints(&dir.join("missing")).is_empty());
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

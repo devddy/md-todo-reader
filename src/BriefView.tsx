@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { type BriefBlock, type BriefSection, countItems, parseBrief } from "./lib/brief";
 import { type DailyNote, type TaskItem, checkableItems } from "./lib/notes";
-import { AddInput, Check, InlineMd, Link } from "./components";
+import { AddInput, Check, InlineMd, Link, useCollapsed } from "./components";
 
 type Props = {
   note: DailyNote;
@@ -13,14 +13,6 @@ type Props = {
 
 const COLLAPSE_KEY = "collapsed-sections";
 
-function loadCollapsed(): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]"));
-  } catch {
-    return new Set();
-  }
-}
-
 /** Card layout for notes written by the Daily Brief skill. */
 export default function BriefView({ note, onToggle, onAddTomorrow }: Props) {
   const brief = useMemo(() => parseBrief(note.content), [note.content]);
@@ -28,18 +20,7 @@ export default function BriefView({ note, onToggle, onAddTomorrow }: Props) {
     () => new Map(checkableItems(note.content).map((t) => [t.line, t])),
     [note.content],
   );
-  const [collapsed, setCollapsed] = useState(loadCollapsed);
-
-  const toggleSection = (heading: string) => {
-    const next = new Set(collapsed);
-    if (!next.delete(heading)) next.add(heading);
-    setCollapsed(next);
-    try {
-      localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
-    } catch {
-      /* per-session only */
-    }
-  };
+  const [collapsed, toggleSection] = useCollapsed(COLLAPSE_KEY);
 
   return (
     <article className="brief">
