@@ -80,6 +80,12 @@ export function tomorrowItems(content: string): TaskItem[] {
   );
 }
 
+/** Checkable items, open and done, under the level-2 sections whose heading matches. */
+export function itemsUnder(content: string, heading: RegExp): TaskItem[] {
+  const lines = scan(content);
+  return checkableItems(content).filter((t) => heading.test(lines[t.line - 1].section));
+}
+
 /** Unchecked explicit `- [ ]` tasks. */
 export function openTasks(content: string): TaskItem[] {
   return checkableItems(content).filter(
@@ -129,6 +135,41 @@ export function addTask(content: string, text: string, target: AddTarget = "toda
   while (insertAt > start + 1 && raw[insertAt - 1].trim() === "") insertAt--;
   raw.splice(insertAt, 0, item);
   return raw.join("\n");
+}
+
+const MEMO = "(메모)";
+
+/**
+ * Appends one bullet the way the daily-todo skill's add_todo.sh does, so the
+ * notch panel, the skill and /daily-brief agree on the format:
+ *   "## 오늘 꼭"    → "- (메모) text"  (the marker /daily-brief keeps on regeneration)
+ *   "## 내일 할 것" → "- text"          (carried over next morning as "(이월)")
+ * Goes at the end of the section (before trailing blank lines); a missing heading
+ * is appended at the end of the file. An identical bullet already there is a no-op.
+ */
+export function addTodo(content: string, text: string, target: AddTarget): string {
+  const clean = text.trim().replace(/^-\s*/, "");
+  if (!clean) return content;
+  const heading = target === "today" ? "## 오늘 꼭" : "## 내일 할 것";
+  const bullet = target === "today" && !clean.startsWith(MEMO) ? `- ${MEMO} ${clean}` : `- ${clean}`;
+  const raw = content.split("\n");
+  const start = raw.findIndex((l) => l.startsWith(heading));
+  if (start === -1) {
+    const body = content.endsWith("\n") || !content ? content : `${content}\n`;
+    return `${body}${heading}\n${bullet}\n`;
+  }
+  let end = start + 1;
+  while (end < raw.length && !raw[end].startsWith("## ")) end++;
+  if (raw.slice(start + 1, end).includes(bullet)) return content;
+  let insertAt = end;
+  while (insertAt > start + 1 && raw[insertAt - 1].trim() === "") insertAt--;
+  raw.splice(insertAt, 0, bullet);
+  return raw.join("\n");
+}
+
+/** The skeleton add_todo.sh writes for a missing note (the Daily Brief output contract). */
+export function briefSkeleton(date: string): string {
+  return `# ${date} (${weekday(date)}) 아침\n오늘 일정: 일정 소스 없음\n## 오늘 꼭\n## 정리됨\n## 참고\n## 내일 할 것\n`;
 }
 
 /** Same skeleton the Daily Brief skill writes, so a later brief run slots in cleanly. */

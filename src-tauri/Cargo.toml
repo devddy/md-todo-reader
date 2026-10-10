@@ -18,13 +18,20 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+
+# Notch panel: swizzle the notch window into a non-activating NSPanel, read screen/pointer geometry.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2" }
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = ["NSEvent", "NSGraphics", "NSPanel", "NSResponder", "NSScreen", "NSView", "NSGlassEffectView", "NSVisualEffectView", "NSWindow"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

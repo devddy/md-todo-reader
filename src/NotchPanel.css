@@ -1,0 +1,316 @@
+/* Notch panel: a floating glass card under the notch, like the Dock. The glass
+   itself is native (notch.rs: Liquid Glass, else vibrancy) behind a transparent
+   page; these colors only need to read on top of it, in light and dark. */
+/* Clear glass is very see-through, so contrast is pushed: near-black / white
+   text, and fields a bit more opaque so they read over busy wallpapers. */
+:root {
+  --notch-text: rgba(0, 0, 0, 0.92);
+  --notch-muted: rgba(0, 0, 0, 0.62);
+  --notch-line: rgba(0, 0, 0, 0.14);
+  --notch-fill: rgba(0, 0, 0, 0.08); /* hover, chips */
+  --notch-field: rgba(255, 255, 255, 0.6); /* input, segmented control */
+  --notch-box: rgba(0, 0, 0, 0.45);
+  --notch-accent: #3b5bdb;
+  --notch-link: #1f3fb0;
+  --notch-on-accent: #fff;
+  --notch-shadow: 0 0 2px rgba(255, 255, 255, 0.6);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--notch-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --notch-text: #fff;
+    --notch-muted: rgba(255, 255, 255, 0.72);
+    --notch-line: rgba(255, 255, 255, 0.18);
+    --notch-fill: rgba(255, 255, 255, 0.14);
+    --notch-field: rgba(0, 0, 0, 0.4);
+    --notch-box: rgba(255, 255, 255, 0.6);
+    --notch-accent: #7b93ff;
+    --notch-link: #b3c1ff;
+    --notch-on-accent: #0b0d18;
+    --notch-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Height is natural up to the max-height Rust sends (85% of the screen); past it
+   only .notch-scroll scrolls, the add row stays put. Never size this to the window.
+   No background: the native glass under the page is the panel. */
+.notch {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px 14px;
+  text-shadow: var(--notch-shadow);
+  animation: notch-drop 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: top center;
+}
+
+.notch-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  scrollbar-width: thin;
+  scrollbar-color: var(--notch-box) transparent;
+}
+
+.notch-scroll.fade-top {
+  --fade-top: 16px;
+}
+
+.notch-scroll.fade-bottom {
+  --fade-bottom: 16px;
+}
+
+.notch-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notch-scroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: var(--notch-box);
+}
+
+@keyframes notch-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.notch-section + .notch-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--notch-line);
+}
+
+.notch-section h2 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--notch-muted);
+}
+
+.notch-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.notch-section ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notch-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 4px;
+  border-radius: 6px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.notch-item:hover {
+  background: var(--notch-fill);
+}
+
+.notch-box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1.5px solid var(--notch-box);
+  border-radius: 4px;
+}
+
+.notch-item.done .notch-box {
+  border-color: var(--notch-accent);
+  background: var(--notch-accent);
+}
+
+/* Full text, always: wrap long lines, break long URLs / ticket keys. */
+.notch-text {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.notch-item.done .notch-text {
+  color: var(--notch-muted);
+  text-decoration: line-through;
+}
+
+.notch-tag {
+  margin-right: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--notch-fill);
+  color: var(--notch-muted);
+  font-size: 10px;
+}
+
+.notch-empty,
+.notch-none {
+  margin: 0;
+  color: var(--notch-muted);
+}
+
+.notch-empty {
+  padding: 6px 0 2px;
+  text-align: center;
+}
+
+.notch-add {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--notch-line);
+}
+
+/* [오늘 | 내일]: both always visible, the selected one filled. */
+.notch-seg {
+  flex: none;
+  display: flex;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--notch-field);
+}
+
+.notch-seg button {
+  padding: 1px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--notch-muted);
+  font: inherit;
+  font-size: 11px;
+}
+
+.notch-seg button:hover {
+  color: var(--notch-text);
+}
+
+.notch-seg button.on {
+  background: var(--notch-accent);
+  color: var(--notch-on-accent);
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.notch-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.notch-plus {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--notch-fill);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.notch-title:hover {
+  color: var(--notch-text);
+}
+
+.notch-title:hover .notch-plus {
+  background: var(--notch-accent);
+  color: var(--notch-on-accent);
+}
+
+.notch-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  background: var(--notch-field);
+  color: var(--notch-text);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.notch-add input:focus {
+  border-color: var(--notch-line);
+}
+
+.notch-add input::placeholder {
+  color: var(--notch-muted);
+}
+
+/* Links: same parts as the main window (inline links + trailing chips). */
+.notch-text a {
+  color: var(--notch-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.notch-text a:hover {
+  text-decoration: underline;
+}
+
+.notch-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 11px;
+  vertical-align: 1px;
+}
+
+.notch-links a {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--notch-accent) 16%, transparent);
+}
+
+.notch-text code {
+  font-size: 12px;
+}
