@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -54,4 +55,26 @@ export function AddInput({ placeholder, onAdd }: { placeholder: string; onAdd: (
       <input name="text" placeholder={placeholder} autoComplete="off" />
     </form>
   );
+}
+
+/** A set of collapsed card keys, remembered in localStorage under `storageKey`. */
+export function useCollapsed(storageKey: string): [Set<string>, (key: string) => void] {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(storageKey) ?? "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+  const toggle = (key: string) => {
+    const next = new Set(collapsed);
+    if (!next.delete(key)) next.add(key);
+    setCollapsed(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...next]));
+    } catch {
+      /* per-session only */
+    }
+  };
+  return [collapsed, toggle];
 }

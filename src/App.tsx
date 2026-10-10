@@ -23,14 +23,38 @@ import {
 } from "./lib/notes";
 import Calendar from "./Calendar";
 import BriefView from "./BriefView";
+import SprintView, { ItemRow } from "./SprintView";
 import { AddInput, Check, InlineMd, Link } from "./components";
 import { isBrief } from "./lib/brief";
+import {
+  type SprintFile,
+  addToSection,
+  type DailyRow,
+  type Sprint,
+  dDay,
+  dailySprintItems,
+  overallProgress,
+  parseSprint,
+  pickSprint,
+  toggleSprintLine,
+} from "./lib/sprint";
 import { sendReminder, useEveningReminder } from "./reminder";
 import "./App.css";
 
 const VAULT_KEY = "vault";
 const CARRY_DAYS = 14;
 const REMIND_KEY = "remind-at";
+const MODE_KEY = "view-mode";
+
+type ViewMode = "daily" | "sprint";
+
+function loadMode(): ViewMode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "sprint" ? "sprint" : "daily";
+  } catch {
+    return "daily";
+  }
+}
 
 function loadRemindAt(): string {
   try {
@@ -54,11 +78,19 @@ export default function App() {
   const [date, setDate] = useState(todayStr());
   const [error, setError] = useState<string | null>(null);
   const [remindAt, setRemindAt] = useState(loadRemindAt); // "" = off
+  const [sprints, setSprints] = useState<SprintFile[]>([]);
+  const [mode, setMode] = useState<ViewMode>(loadMode);
+  const [sprintPath, setSprintPath] = useState<string | null>(null); // null = current sprint
 
   const reload = useCallback(async () => {
     if (!vault) return;
     try {
-      setNotes(await invoke<DailyNote[]>("load_daily", { vault }));
+      const [daily, sprintFiles] = await Promise.all([
+        invoke<DailyNote[]>("load_daily", { vault }),
+        invoke<SprintFile[]>("load_sprints", { vault }),
+      ]);
+      setNotes(daily);
+      setSprints(sprintFiles);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -91,6 +123,15 @@ export default function App() {
     }
   }
 
+  function changeMode(value: ViewMode) {
+    setMode(value);
+    try {
+      localStorage.setItem(MODE_KEY, value);
+    } catch {
+      /* per-session only */
+    }
+  }
+
   const byDate = useMemo(() => new Map(notes.map((n) => [n.date, n])), [notes]);
   const note = byDate.get(date);
   const prev = useMemo(() => [...notes].reverse().find((n) => n.date < date), [notes, date]);
@@ -116,6 +157,24 @@ export default function App() {
       .reverse();
   }, [notes, date, prev, planned]);
 
+  const sprintList = useMemo(
+    () =>
+      sprints.map(parseSprint).sort((a, b) => (b.start || b.file.name).localeCompare(a.start || a.file.name)),
+    [sprints],
+  );
+
+  // Sprint shown in sprint mode: the picked file, else the one running today.
+  const viewedSprint = useMemo(() => {
+    return sprintList.find((s) => s.file.path === sprintPath) ?? pickSprint(sprintList, todayStr());
+  }, [sprintList, sprintPath]);
+
+  // Daily panel: the sprint running on the selected date and what of it matters that day.
+  const sprintToday = useMemo(() => {
+    const sprint = pickSprint(sprintList, date);
+    if (!sprint || (sprint.end && sprint.end < date) || (sprint.start && sprint.start > date)) return null;
+    return { sprint, ...dailySprintItems(sprint, date) };
+  }, [sprintList, date]);
+
   async function pickVault() {
     const dir = await open({ directory: true, title: "할일 md 폴더 선택" });
     if (typeof dir !== "string") return;
@@ -127,17 +186,32 @@ export default function App() {
     setVault(dir);
   }
 
-  async function save(target: DailyNote, content: string) {
-    setNotes((ns) => {
-      const rest = ns.filter((n) => n.path !== target.path);
-      return [...rest, { ...target, content }].sort((a, b) => a.date.localeCompare(b.date));
-    });
+  // Every write goes through here: optimistic local update, then the file; reload on failure.
+  async function persist(path: string, content: string) {
     try {
-      await invoke("write_note", { path: target.path, content });
+      await invoke("write_note", { path, content });
     } catch (e) {
       setError(String(e));
       reload();
     }
+  }
+
+  function save(target: DailyNote, content: string) {
+    setNotes((ns) => {
+      const rest = ns.filter((n) => n.path !== target.path);
+      return [...rest, { ...target, content }].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    persist(target.path, content);
+  }
+
+  function saveSprint(target: SprintFile, content: string) {
+    if (content === target.content) return;
+    setSprints((ss) => ss.map((f) => (f.path === target.path ? { ...f, content } : f)));
+    persist(target.path, content);
+  }
+
+  function toggleSprint(target: SprintFile, line: number) {
+    saveSprint(target, toggleSprintLine(target.content, line));
   }
 
   function toggle(target: DailyNote, line: number) {
@@ -175,36 +249,68 @@ export default function App() {
         <button className="vault" onClick={pickVault} title={vault}>
           {vault.split("/").pop()}
         </button>
-        <Calendar
-          selected={date}
-          onSelect={setDate}
-          progressOf={(d) => {
-            const n = byDate.get(d);
-            return n ? progress(n.content) : null;
-          }}
-        />
-        <ul className="recent">
-          {[...notes]
-            .reverse()
-            .slice(0, 30)
-            .map((n) => {
-              const p = progress(n.content);
-              return (
-                <li key={n.path}>
-                  <button className={n.date === date ? "active" : ""} onClick={() => setDate(n.date)}>
-                    <span>
-                      {n.date.slice(5)} ({weekday(n.date)})
-                    </span>
-                    {p.total > 0 && (
-                      <span className="count">
-                        {p.done}/{p.total}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-        </ul>
+        <div className="mode-switch" role="tablist">
+          {(["daily", "sprint"] as const).map((m) => (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={mode === m}
+              className={mode === m ? "active" : ""}
+              onClick={() => changeMode(m)}
+            >
+              {m === "daily" ? "데일리" : "스프린트"}
+            </button>
+          ))}
+        </div>
+        {mode === "sprint" ? (
+          <ul className="recent">
+            {sprintList.map((s) => (
+              <li key={s.file.path}>
+                <button
+                  className={s.file.path === viewedSprint?.file.path ? "active" : ""}
+                  onClick={() => setSprintPath(s.file.path)}
+                  title={s.file.path}
+                >
+                  <span className="ellipsis">{s.title}</span>
+                  <span className="count">{dDay(s, todayStr())}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <>
+            <Calendar
+              selected={date}
+              onSelect={setDate}
+              progressOf={(d) => {
+                const n = byDate.get(d);
+                return n ? progress(n.content) : null;
+              }}
+            />
+            <ul className="recent">
+              {[...notes]
+                .reverse()
+                .slice(0, 30)
+                .map((n) => {
+                  const p = progress(n.content);
+                  return (
+                    <li key={n.path}>
+                      <button className={n.date === date ? "active" : ""} onClick={() => setDate(n.date)}>
+                        <span>
+                          {n.date.slice(5)} ({weekday(n.date)})
+                        </span>
+                        {p.total > 0 && (
+                          <span className="count">
+                            {p.done}/{p.total}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
+          </>
+        )}
         <div className="settings">
           <label>
             <input
@@ -230,77 +336,153 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="content">
-        <header className="toolbar">
-          <button onClick={() => setDate(shiftDate(date, -1))} aria-label="이전 날">
-            ‹
-          </button>
-          <h1>
-            {date} <span className="weekday">({weekday(date)})</span>
-          </h1>
-          <button onClick={() => setDate(shiftDate(date, 1))} aria-label="다음 날">
-            ›
-          </button>
-          {!isToday && (
-            <button className="today" onClick={() => setDate(todayStr())}>
-              오늘
-            </button>
-          )}
-          <span className="spacer" />
-          {note && (
-            <button onClick={() => openPath(note.path)} title="기본 앱으로 원본 열기">
-              원본 열기
-            </button>
-          )}
-        </header>
-
-        {error && <div className="error">{error}</div>}
-
-        <div className="quick-add">
-          <AddInput placeholder={`${date.slice(5)} 오늘 꼭에 추가 후 Enter`} onAdd={(t) => add(t)} />
-        </div>
-
-        {planned.length > 0 && prev && (
-          <Panel title={`${prev.date.slice(5)}에 적어 둔 할 일`}>
-            {planned.map((t) => (
-              <TaskRow key={t.line} task={t} onToggle={() => toggle(prev, t.line)} />
-            ))}
-          </Panel>
-        )}
-
-        {carried.length > 0 && (
-          <Panel title={`밀린 일 ${carried.length}`}>
-            {carried.map(({ note: n, task }) => (
-              <TaskRow
-                key={`${n.date}:${task.line}`}
-                task={task}
-                tag={n.date.slice(5)}
-                onToggle={() => toggle(n, task.line)}
-              />
-            ))}
-          </Panel>
-        )}
-
-        {note && isBrief(note.content) ? (
-          <BriefView
-            note={note}
-            onToggle={(line) => toggle(note, line)}
-            onAddTomorrow={(t) => add(t, "tomorrow")}
+      {mode === "sprint" ? (
+        <main className="content">
+          {error && <div className="error">{error}</div>}
+          <SprintView
+            sprint={viewedSprint}
+            today={todayStr()}
+            onToggle={(line) => viewedSprint && toggleSprint(viewedSprint.file, line)}
+            onAdd={(heading, text) =>
+              viewedSprint && saveSprint(viewedSprint.file, addToSection(viewedSprint.file.content, heading, text))
+            }
+            onOpen={() => viewedSprint && openPath(viewedSprint.file.path)}
           />
-        ) : note ? (
-          <NoteView note={note} onToggle={(line) => toggle(note, line)} />
-        ) : (
-          <p className="hint">이 날짜의 파일이 없어요. 위에서 할일을 추가하면 새로 만들어져요.</p>
-        )}
-      </main>
+        </main>
+      ) : (
+        <main className="content">
+          <header className="toolbar">
+            <button onClick={() => setDate(shiftDate(date, -1))} aria-label="이전 날">
+              ‹
+            </button>
+            <h1>
+              {date} <span className="weekday">({weekday(date)})</span>
+            </h1>
+            <button onClick={() => setDate(shiftDate(date, 1))} aria-label="다음 날">
+              ›
+            </button>
+            {!isToday && (
+              <button className="today" onClick={() => setDate(todayStr())}>
+                오늘
+              </button>
+            )}
+            <span className="spacer" />
+            {note && (
+              <button onClick={() => openPath(note.path)} title="기본 앱으로 원본 열기">
+                원본 열기
+              </button>
+            )}
+          </header>
+
+          {error && <div className="error">{error}</div>}
+
+          <div className="quick-add">
+            <AddInput placeholder={`${date.slice(5)} 오늘 꼭에 추가 후 Enter`} onAdd={(t) => add(t)} />
+          </div>
+
+          {planned.length > 0 && prev && (
+            <Panel title={`${prev.date.slice(5)}에 적어 둔 할 일`}>
+              {planned.map((t) => (
+                <TaskRow key={t.line} task={t} onToggle={() => toggle(prev, t.line)} />
+              ))}
+            </Panel>
+          )}
+
+          {carried.length > 0 && (
+            <Panel title={`밀린 일 ${carried.length}`}>
+              {carried.map(({ note: n, task }) => (
+                <TaskRow
+                  key={`${n.date}:${task.line}`}
+                  task={task}
+                  tag={n.date.slice(5)}
+                  onToggle={() => toggle(n, task.line)}
+                />
+              ))}
+            </Panel>
+          )}
+
+          {sprintToday && (
+            <Panel title={sprintTitle(sprintToday.sprint, date)} onTitleClick={() => changeMode("sprint")}>
+              {(
+                [
+                  ["기한", sprintToday.due],
+                  ["블로커", sprintToday.blockers],
+                  ["기한 없음", sprintToday.undated],
+                  ["팀원 · Jira", sprintToday.members],
+                ] as [string, DailyRow[]][]
+              ).map(([label, rows]) =>
+                rows.length === 0 ? null : (
+                  <li key={label} className="panel-group">
+                    <h3>{label}</h3>
+                    <ul>
+                      {rows.map(({ item, tag }) =>
+                        label === "팀원 · Jira" ? (
+                          <ItemRow key={item.line} item={item} today={date} mode="readonly" tag={tag} />
+                        ) : (
+                          <ItemRow
+                            key={item.line}
+                            item={item}
+                            today={date}
+                            mode="check"
+                            tag={tag}
+                            onToggle={() => toggleSprint(sprintToday.sprint.file, item.line)}
+                          />
+                        ),
+                      )}
+                    </ul>
+                  </li>
+                ),
+              )}
+              {!sprintToday.due.length &&
+                !sprintToday.blockers.length &&
+                !sprintToday.undated.length &&
+                !sprintToday.members.length && <li className="hint">이 날짜에 챙길 스프린트 할 일은 없어요.</li>}
+            </Panel>
+          )}
+
+          {note && isBrief(note.content) ? (
+            <BriefView
+              note={note}
+              onToggle={(line) => toggle(note, line)}
+              onAddTomorrow={(t) => add(t, "tomorrow")}
+            />
+          ) : note ? (
+            <NoteView note={note} onToggle={(line) => toggle(note, line)} />
+          ) : (
+            <p className="hint">이 날짜의 파일이 없어요. 위에서 할일을 추가하면 새로 만들어져요.</p>
+          )}
+        </main>
+      )}
     </div>
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+/** "스프린트 · <name> · D-3 · 12/30" for the daily panel; D-day counts from the selected date. */
+function sprintTitle(sprint: Sprint, date: string): string {
+  const { done, total } = overallProgress(sprint);
+  return ["스프린트", sprint.title, dDay(sprint, date), total ? `${done}/${total}` : ""].filter(Boolean).join(" · ");
+}
+
+function Panel({
+  title,
+  onTitleClick,
+  children,
+}: {
+  title: string;
+  onTitleClick?: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <section className="panel">
-      <h2>{title}</h2>
+      <h2>
+        {onTitleClick ? (
+          <button className="panel-link" onClick={onTitleClick} title="스프린트 보기">
+            {title} ›
+          </button>
+        ) : (
+          title
+        )}
+      </h2>
       <ul>{children}</ul>
     </section>
   );

@@ -36,14 +36,16 @@ export function isBrief(content: string): boolean {
   return /^##\s+오늘 꼭\s*$/m.test(content);
 }
 
+/** Splits the trailing "— [a](x), [b](y)" link chips off an item body. */
+export function splitLinks(text: string): { body: string; links: BriefItem["links"] } {
+  const tail = LINKS_TAIL_RE.exec(text);
+  if (!tail) return { body: text, links: [] };
+  const links = [...tail[1].matchAll(new RegExp(LINK_SRC, "g"))].map((m) => ({ label: m[1], url: m[2] }));
+  return { body: text.slice(0, tail.index), links };
+}
+
 function toItem(line: number, text: string): BriefItem {
-  let body = ITEM_RE.exec(text)?.[1] ?? text;
-  let links: BriefItem["links"] = [];
-  const tail = LINKS_TAIL_RE.exec(body);
-  if (tail) {
-    links = [...tail[1].matchAll(new RegExp(LINK_SRC, "g"))].map((m) => ({ label: m[1], url: m[2] }));
-    body = body.slice(0, tail.index);
-  }
+  const { body, links } = splitLinks(ITEM_RE.exec(text)?.[1] ?? text);
   const carried = CARRIED_RE.test(body);
   return { line, body: body.replace(CARRIED_RE, ""), links, carried };
 }
